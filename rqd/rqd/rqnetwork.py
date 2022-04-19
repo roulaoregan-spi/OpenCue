@@ -71,6 +71,7 @@ class RunningFrame(object):
         self.stime = 0
 
         self.lluTime = 0
+        self.childrenProcs = {}
 
     def runningFrameInfo(self):
         """Returns the RunningFrameInfo object"""
@@ -92,8 +93,43 @@ class RunningFrame(object):
             num_gpus=self.runFrame.num_gpus,
             max_used_gpu_memory=self.maxUsedGpuMemory,
             used_gpu_memory=self.usedGpuMemory
+            children=self._serializeChildrenProcs()
         )
         return runningFrameInfo
+
+    def _serializeChildrenProcs(self):
+        """ Collect and serialize children proc stats for protobuf
+            Convert to Kilobytes:
+            * RSS (Resident set size) measured in pages
+            * Statm size measured in pages
+            * Stat size measured in bytes
+
+        :param data: dictionary
+        :return: serialized children proc host stats
+        :rtype: rqd.compiled_proto.report_pb2.ChildrenProcStats
+        """
+
+        childrenProc = rqd.compiled_proto.report_pb2.ChildrenProcStats()
+        for proc, values in self.childrenProcs.items():
+            procStats = rqd.compiled_proto.report_pb2.ProcStats()
+            procStatFile = rqd.compiled_proto.report_pb2.Stat()
+            procStatmFile = rqd.compiled_proto.report_pb2.Statm()
+
+            procStatFile.pid = proc
+            procStatFile.name = values["name"]
+            procStatFile.state = values["state"]
+            procStatFile.vsize = values["vsize"]
+            procStatFile.rss = values["rss"]
+
+            procStatmFile.size = values["statm_size"]
+            procStatmFile.rss = values["statm_rss"]
+
+            procStats.stat.CopyFrom(procStatFile)
+            procStats.statm.CopyFrom(procStatmFile)
+            procStats.cmdline = values["cmd_line"].decode()
+            childrenProc.children.extend([procStats])
+
+        return childrenProc
 
     def status(self):
         """Returns the status of the frame"""

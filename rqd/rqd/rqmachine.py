@@ -206,6 +206,19 @@ class Machine(object):
             stat = os.stat(frame.runFrame.log_dir_file).st_mtime
             frame.lluTime = int(stat)
 
+    def _getStatFields(self, pidFilePath):
+        statFields = []
+
+        try:
+            with open(pidFilePath, "r") as statFile:
+                # test
+                # statFields = [None, None] + statFile.read().rsplit(")", 1)[-1].split()
+                statFields = statFile.read().split()
+        except Exception as e:
+            log.warning("Not able to read pidFilePath: ", pidFilePath)
+
+        return statFields
+
     def rssUpdate(self, frames):
         """Updates the rss and maxrss for all running frames"""
         if platform.system() == 'Windows' and winpsIsAvailable:
@@ -234,13 +247,15 @@ class Machine(object):
         for pid in os.listdir("/proc"):
             if pid.isdigit():
                 try:
-                    with open("/proc/%s/stat" % pid, "r") as statFile:
-                        statFields = [None, None] + statFile.read().rsplit(")", 1)[-1].split()
-
-                    # See "man proc"
+                    statFields = self._getStatFields(rqd.rqconstants.PATH_PROC_PID_STAT
+                                        .format(pid))
                     pids[pid] = {
+                        "name": statFields[1],
+                        "state": statFields[2],
+                        "pgrp": statFields[4],
                         "session": statFields[5],
-                        "vsize": statFields[22],
+                        # virtual memory size is in bytes convert to kb
+                        "vsize": int(statFields[22]),
                         "rss": statFields[23],
                         # These are needed to compute the cpu used
                         "utime": statFields[13],
@@ -251,10 +266,27 @@ class Machine(object):
                         # after system boot.
                         "start_time": statFields[21],
                     }
+                    #add cmdline:
+                    with open(rqd.rqconstants.PATH_PROC_PID_CMDLINE.format(pid), "r") as cmdline_file:
+                        pid_cmdline = cmdline_file.read()
+                    pids[pid]["cmd_line"] = unicode(pid_cmdline, "utf-8")
+
+                    # 2. Collect Statm file: /proc/[pid]/statm (same as status vsize in kb)
+                    #    - size: "total program size"
+                    #    - rss: inaccurate, similar to VmRss in /proc/[pid]/status
+                    child_statm_fields = self._getStatFields(rqd.rqconstants.PATH_PROC_PID_STATM
+                                                             .format(pid))
+                    try:
+                        pids[pid]['statm_size'] = int(re.search("\d+", child_statm_fields[0]).group()) \
+                            if re.search("\d+", child_statm_fields[0]) else -1
+                        pids[pid]['statm_rss'] = int(re.search("\d+", child_statm_fields[1]).group()) \
+                            if re.search("\d+", child_statm_fields[1]) else -1
+                    except Exception as e:
+                        log.warning("Failed to read statm file: %s", e)
 
                 # pylint: disable=broad-except
-                except Exception:
-                    log.exception('failed to read stat file for pid %s', pid)
+                except Exception as e:
+                    log.exception('Failed to read stat file for pid %s', pid)
 
         # pylint: disable=too-many-nested-blocks
         try:
@@ -266,10 +298,12 @@ class Machine(object):
 
             for frame in values:
                 if frame.pid > 0:
+
                     session = str(frame.pid)
                     rss = 0
                     vsize = 0
                     pcpu = 0
+                    # children pids share the same session id
                     for pid, data in pids.items():
                         if data["session"] == session:
                             try:
@@ -282,6 +316,29 @@ class Machine(object):
                                             int(data["stime"]) + \
                                             int(data["cutime"]) + \
                                             int(data["cstime"])
+                                #only keep the highest recorded rss value
+                                if pid in frame.childrenProcs:
+                                    childRss = (int(data["rss"]) * resource.getpagesize()) // 1024
+                                    if childRss > frame.childrenProcs[pid]['rss']:
+                                        frame.childrenProcs[pid]['rss_page'] = int(data["rss"])
+                                        frame.childrenProcs[pid]['rss'] = childRss
+                                        frame.childrenProcs[pid]['vsize'] = int(data["vsize"])  // 1024
+                                        frame.childrenProcs[pid]['statm_rss'] = \
+                                            (int(data["statm_rss"]) * resource.getpagesize()) // 1024
+                                        frame.childrenProcs[pid]['statm_size'] = \
+                                            (int(data["statm_size"]) * resource.getpagesize()) // 1024
+                                else:
+                                    frame.childrenProcs[pid] = \
+                                        {'name': data['name'],
+                                         'rss_page': int(data["rss"]),
+                                         'rss': (int(data["rss"]) * resource.getpagesize()) // 1024,
+                                         'vsize': int(data["vsize"])  // 1024,
+                                         'state': data['state'],
+                                         # statm reports in pages (~ 4kB)
+                                         # same as VmRss in /proc/[pid]/status (in KB)
+                                         'statm_rss': (int(data["statm_rss"]) * resource.getpagesize()) // 1024,
+                                         'statm_size': (int(data["statm_size"]) * resource.getpagesize()) // 1024,
+                                         'cmd_line': data["cmd_line"]}
 
                                 # Seconds of process life, boot time is already in seconds
                                 seconds = now - bootTime - \
@@ -314,6 +371,10 @@ class Machine(object):
 
                     frame.rss = rss
                     frame.maxRss = max(rss, frame.maxRss)
+
+                    if os.path.exists(frame.runFrame.log_dir_file):
+                        stat = os.stat(frame.runFrame.log_dir_file).st_mtime
+                        frame.lluTime = int(stat)
 
                     frame.vsize = vsize
                     frame.maxVsize = max(vsize, frame.maxVsize)

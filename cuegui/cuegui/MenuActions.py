@@ -50,6 +50,7 @@ import cuegui.LayerDialog
 import cuegui.LocalBooking
 import cuegui.Logger
 import cuegui.PreviewWidget
+import cuegui.ProcChildren
 import cuegui.ServiceDialog
 import cuegui.ShowDialog
 import cuegui.TasksDialog
@@ -874,6 +875,20 @@ class FrameActions(AbstractActions):
                 cuegui.Utils.popupView(files[sorted(files.keys())[-1]])
             else:
                 cuegui.Utils.popupView(path)
+
+    viewRunning_info = ["View Running", None, "viewRunning"]
+
+    def viewRunning(self):
+        """ todo
+
+        :return:
+        """
+        job = self._getSource()
+        text = "Displaying host stats for each child process for job:\n%s" % job.name()
+        procDialog = cuegui.ProcChildren.ProcChildrenDialog(job=job,
+                                                            text=text,
+                                                            title="View Running Child Proc Host Stats")
+        procDialog.exec_()
 
     useLocalCores_info = ["Use local cores...",
                           "Set a single frame to use the local desktop cores.",
