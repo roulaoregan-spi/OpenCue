@@ -93,17 +93,19 @@ message RunningFrameInfo {
     int32 num_gpus = 15;
     int64 max_used_gpu_memory = 16; // kB
     int64 used_gpu_memory = 17; // kB
-    ChildrenProcStats children = 15; //additional data about the running frame's child processes
+    ChildrenProcStats children = 18; //additional data about the running frame's child processes
 };
 
 message ChildrenProcStats {
     repeated ProcStats children = 2;
 }
+
 message ProcStats {
-    Stat stat = 2;
-    Statm statm = 3;
-    Status status = 4;
-    string cmdline = 5;
+    Stat stat = 1;
+    Statm statm = 2;
+    Status status = 3;
+    string cmdline = 4;
+    string start_time = 5;
 }
 
 message Stat {

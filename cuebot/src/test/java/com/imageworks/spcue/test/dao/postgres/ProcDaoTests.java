@@ -663,6 +663,7 @@ public class ProcDaoTests extends AbstractTransactionalJUnit4SpringContextTests 
         for (DispatchFrame frame: frames) {
 
             VirtualProc proc = VirtualProc.build(host, frame);
+            proc.childProcesses = children;
             frame.minMemory = Dispatcher.MEM_RESERVED_DEFAULT;
             dispatcher.dispatch(frame, proc);
 

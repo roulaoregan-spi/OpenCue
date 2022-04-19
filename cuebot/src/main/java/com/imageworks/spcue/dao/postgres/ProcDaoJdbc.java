@@ -240,6 +240,7 @@ public class ProcDaoJdbc extends JdbcDaoSupport implements ProcDao {
             "int_virt_max_used = ?, " +
             "int_gpu_mem_used = ?, " +
             "int_gpu_mem_max_used = ?, " +
+            "bytea_children = ?, " +
             "ts_ping = current_timestamp " +
         "WHERE " +
             "pk_frame = ?";
@@ -261,7 +262,6 @@ public class ProcDaoJdbc extends JdbcDaoSupport implements ProcDao {
                     "SELECT pk_frame FROM proc WHERE pk_frame=? FOR UPDATE",
                     String.class, f.getFrameId()).equals(f.getFrameId())) {
 
-                //FIX!!
                 getJdbcTemplate().update(UPDATE_PROC_MEMORY_USAGE,
                         rss, maxRss, vss, maxVss,
                         usedGpuMemory, maxUsedGpuMemory, f.getFrameId());
@@ -276,8 +276,10 @@ public class ProcDaoJdbc extends JdbcDaoSupport implements ProcDao {
                                 updateProc.setLong(2, maxRss);
                                 updateProc.setLong(3, vss);
                                 updateProc.setLong(4, maxVss);
-                                updateProc.setBytes(5, children);
-                                updateProc.setString(6, f.getFrameId());
+                                updateProc.setLong(5, usedGpuMemory);
+                                updateProc.setLong(6, maxUsedGpuMemory);
+                                updateProc.setBytes(7, children);
+                                updateProc.setString(8, f.getFrameId());
                                 return updateProc;
                             }
                         }

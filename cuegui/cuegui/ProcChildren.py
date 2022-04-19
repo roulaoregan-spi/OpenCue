@@ -26,9 +26,7 @@ from __future__ import print_function
 from __future__ import division
 
 from builtins import str
-from builtins import range
 
-from PySide2 import QtCore
 from PySide2 import QtGui
 from PySide2 import QtWidgets
 
@@ -39,17 +37,18 @@ import cuegui.Utils
 
 
 class ProcChildren(QtWidgets.QWidget):
-    """
-    todo
-    """
-    HEADERS = ["PID", "Name", "Rss (KB)", "VSize (KB)",
+    """Widget for displaying Host statistics for a Proc's child processes."""
+
+    HEADERS = ["PID", "Name", "Start Time", "Rss (KB)", "VSize (KB)",
                "Statm Rss (KB)", "Statm Size (KB)", "Cmd line"]
 
     def __init__(self, job, parent=None):
         """
+        Initializes the list of procs for a given job to display
 
-        :param job:
-        :param parent:
+        :param job: job Object for this item
+        :ptype job: opencue.wrappers.job.Job
+        :param parent: Optional parent for this item
         """
         QtWidgets.QWidget.__init__(self, parent)
         self._data = {}
@@ -67,10 +66,7 @@ class ProcChildren(QtWidgets.QWidget):
         layout.addWidget(self._tree)
 
     def update(self):
-        """
-
-        :return:
-        """
+        """ Updates visual representation with latest data"""
         self._model.clear()
         self._model.setHorizontalHeaderLabels(ProcChildren.HEADERS)
         childrenProc = opencue.compiled_proto.report_pb2.ChildrenProcStats()
@@ -80,7 +76,8 @@ class ProcChildren(QtWidgets.QWidget):
             procs = opencue.api.getProcs(job=[self._job.name()],
                                          layer=[x.name() for x in self._job.getLayers()])
             for proc in procs:
-                data['children_processes'] = childrenProc.FromString(proc.data.child_processes).children
+                data['children_processes'] =\
+                    childrenProc.FromString(proc.data.child_processes).children
 
                 name = proc.data.name.split("/")[0]
                 if name not in data:
@@ -90,8 +87,10 @@ class ProcChildren(QtWidgets.QWidget):
 
             self._data = data
 
-        except opencue.exception.CueException as e:
-            cuegui.Utils.showErrorMessageBox("No Proc Data available: \n%s"%self._job.name())
+        except opencue.exception.CueException:
+            msg = ('No Proc Data available: \n%s '
+                   % (self._job.name()))
+            cuegui.Utils.showErrorMessageBox(msg)
 
     def _addProc(self, entry):
         host = entry["host"]
@@ -103,6 +102,7 @@ class ProcChildren(QtWidgets.QWidget):
         for proc in entry['children_processes']:
             checkbox.appendRow([QtGui.QStandardItem(proc.stat.pid),
                                 QtGui.QStandardItem(proc.stat.name),
+                                QtGui.QStandardItem(proc.start_time),
                                 QtGui.QStandardItem(str(proc.stat.rss)),
                                 QtGui.QStandardItem(str(proc.stat.vsize)),
                                 QtGui.QStandardItem(str(proc.statm.rss)),
@@ -114,14 +114,20 @@ class ProcChildren(QtWidgets.QWidget):
 
 
 class ProcChildrenDialog(QtWidgets.QDialog):
-    """@todo  """
+    """
+    Dialog for displaying Host statistics for a Proc's child processes
+    """
     def __init__(self, job, text, title, parent=None):
         """
-
-        :param job:
-        :param text:
-        :param title:
-        :param parent:
+        Initializes the data to be displayed
+        :ptype job: opencue.wrappers.job.Job
+        :param job: job Object for this item
+        :ptype text: str
+        :param text: Description of what is being displayed
+        :ptype title: str
+        :param title: Window Title
+        :param parent: AbstractActions
+        :param parent: The dialog's parent
         """
 
         QtWidgets.QDialog.__init__(self, parent)
@@ -129,9 +135,9 @@ class ProcChildrenDialog(QtWidgets.QDialog):
         self.job = job
         self.text = text
         self.title = title
-
         self.setWindowTitle(self.title)
-        #@todo clean up var names etc.
+        self._childProcStats = ProcChildren(job=job, parent=parent)
+
         _labelText = QtWidgets.QLabel(text, self)
         _labelText.setWordWrap(True)
         _btnUpdate = QtWidgets.QPushButton("Refresh", self)
@@ -139,8 +145,6 @@ class ProcChildrenDialog(QtWidgets.QDialog):
 
         _vlayout = QtWidgets.QVBoxLayout(self)
         _vlayout.addWidget(_labelText)
-        self._childProcStats = ProcChildren(job=job, parent=parent)
-
         _vlayout.addWidget(self._childProcStats)
 
         _hlayout = QtWidgets.QHBoxLayout()
@@ -149,6 +153,7 @@ class ProcChildrenDialog(QtWidgets.QDialog):
         _vlayout.addLayout(_hlayout)
 
         self._childProcStats.update()
+
         _btnClose.clicked.connect(self.accept)
         _btnUpdate.clicked.connect(self.refresh)
 

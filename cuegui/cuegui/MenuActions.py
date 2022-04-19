@@ -879,15 +879,13 @@ class FrameActions(AbstractActions):
     viewRunning_info = ["View Running", None, "viewRunning"]
 
     def viewRunning(self):
-        """ todo
-
-        :return:
-        """
+        """ Display a Proc's child processes Host statistics."""
         job = self._getSource()
         text = "Displaying host stats for each child process for job:\n%s" % job.name()
+        title = "View Running Child Proc Host Stats"
         procDialog = cuegui.ProcChildren.ProcChildrenDialog(job=job,
                                                             text=text,
-                                                            title="View Running Child Proc Host Stats")
+                                                            title=title)
         procDialog.exec_()
 
     useLocalCores_info = ["Use local cores...",
